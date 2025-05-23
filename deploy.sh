@@ -178,14 +178,25 @@ chown -R www-data:www-data $PROJECT_DIR
 echo -e "${YELLOW}Building Next.js application...${NC}"
 cd $PROJECT_DIR
 
-# Get the full path to npm
-NPM_PATH=$(which npm)
-NODE_PATH=$(which node)
+# Get the actual npm and node paths, avoiding temporary fnm multishell paths
+NPM_PATH=""
+NODE_PATH=""
 
-if [ -z "$NPM_PATH" ]; then
-    echo -e "${RED}npm not found in PATH. Checking common locations...${NC}"
-    # Check common npm locations
-    for path in /usr/local/bin/npm /usr/bin/npm ~/.local/share/fnm/node-versions/*/installation/bin/npm; do
+# First, try to find fnm's actual installation
+if [ -d "$HOME/.local/share/fnm" ]; then
+    # Find the current/default Node.js version in fnm
+    FNM_NODE_DIR=$(find "$HOME/.local/share/fnm/node-versions" -name "installation" -type d | head -1)
+    if [ -n "$FNM_NODE_DIR" ]; then
+        NPM_PATH="$FNM_NODE_DIR/bin/npm"
+        NODE_PATH="$FNM_NODE_DIR/bin/node"
+        echo -e "${GREEN}Found fnm installation at: $FNM_NODE_DIR${NC}"
+    fi
+fi
+
+# Fallback to system paths if fnm paths not found or don't exist
+if [ ! -f "$NPM_PATH" ]; then
+    echo -e "${YELLOW}Checking system paths for npm...${NC}"
+    for path in /usr/local/bin/npm /usr/bin/npm; do
         if [ -f "$path" ]; then
             NPM_PATH="$path"
             NODE_PATH="$(dirname $path)/node"
@@ -194,17 +205,37 @@ if [ -z "$NPM_PATH" ]; then
     done
 fi
 
-if [ -z "$NPM_PATH" ]; then
-    echo -e "${RED}npm still not found. Please check Node.js installation.${NC}"
+if [ ! -f "$NPM_PATH" ]; then
+    echo -e "${RED}npm not found in any expected location. Please check Node.js installation.${NC}"
     exit 1
 fi
 
 echo -e "${GREEN}Using npm at: $NPM_PATH${NC}"
 echo -e "${GREEN}Using node at: $NODE_PATH${NC}"
 
-# Install dependencies and build as www-data user with explicit PATH
-sudo -u www-data env PATH="$(dirname $NPM_PATH):$PATH" $NPM_PATH install
-sudo -u www-data env PATH="$(dirname $NPM_PATH):$PATH" $NPM_PATH run build
+# Ensure the binaries are executable
+chmod +x "$NPM_PATH" "$NODE_PATH" 2>/dev/null || true
+
+# Create a temporary script to run npm commands with proper environment
+cat > /tmp/run_npm.sh << EOF
+#!/bin/bash
+export PATH="$(dirname $NPM_PATH):\$PATH"
+export NODE_PATH="$NODE_PATH"
+cd "$PROJECT_DIR"
+"$NPM_PATH" "\$@"
+EOF
+
+chmod +x /tmp/run_npm.sh
+
+# Install dependencies and build as www-data user
+echo -e "${YELLOW}Installing npm dependencies...${NC}"
+sudo -u www-data /tmp/run_npm.sh install
+
+echo -e "${YELLOW}Building Next.js application...${NC}"
+sudo -u www-data /tmp/run_npm.sh run build
+
+# Clean up temporary script
+rm -f /tmp/run_npm.sh
 
 # Configure Nginx
 echo -e "${YELLOW}Configuring Nginx...${NC}"
