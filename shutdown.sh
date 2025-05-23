@@ -43,6 +43,32 @@ systemctl daemon-reload
 echo -e "${YELLOW}Removing nginx configuration...${NC}"
 rm -f "$NGINX_SITE"
 rm -f "$NGINX_ENABLED"
+rm -f "$NGINX_SITE.backup."* 2>/dev/null || true
+
+# Remove SSL certificates if they exist
+echo -e "${YELLOW}Removing SSL certificates...${NC}"
+if command -v certbot &> /dev/null; then
+    # Get list of certificates and remove them
+    CERT_DOMAINS=$(certbot certificates 2>/dev/null | grep "Certificate Name:" | awk '{print $3}' || true)
+    if [ -n "$CERT_DOMAINS" ]; then
+        for domain in $CERT_DOMAINS; do
+            echo -e "${YELLOW}Removing SSL certificate for $domain...${NC}"
+            certbot delete --cert-name "$domain" --non-interactive 2>/dev/null || true
+        done
+    fi
+    
+    # Remove certbot cron jobs
+    echo -e "${YELLOW}Removing certbot cron jobs...${NC}"
+    crontab -l 2>/dev/null | grep -v "certbot renew" | crontab - 2>/dev/null || true
+    
+    # Remove certbot package
+    apt remove --purge -y certbot python3-certbot-nginx 2>/dev/null || true
+fi
+
+# Remove Let's Encrypt directories
+if [ -d "/etc/letsencrypt" ]; then
+    rm -rf /etc/letsencrypt
+fi
 
 # Restore default nginx site if it exists
 if [ -f "/etc/nginx/sites-available/default" ]; then
@@ -139,11 +165,13 @@ echo
 echo -e "${YELLOW}What was removed:${NC}"
 echo "- Next.js application and service"
 echo "- Nginx cloaking configuration"
+echo "- SSL certificates and Let's Encrypt setup"
 echo "- PHP 8.3 and extensions"
 echo "- Node.js and npm (nvm installations)"
 echo "- Project files in $PROJECT_DIR"
 echo "- Systemd service files"
 echo "- Firewall rules (reset to default)"
+echo "- Certbot cron jobs and auto-renewal"
 echo
 echo -e "${YELLOW}What was preserved:${NC}"
 echo "- System packages and dependencies"
