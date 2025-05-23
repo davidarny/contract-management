@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-DOMAIN=${1:-"your-domain.com"}
+DOMAIN=${1:-"contractdatahub.tech"}
 NGINX_SITE="/etc/nginx/sites-available/cloaking-site"
 NGINX_ENABLED="/etc/nginx/sites-enabled/cloaking-site"
 
