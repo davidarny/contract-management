@@ -121,8 +121,10 @@ check_url() {
     fi
     
     if [ "$VERBOSE" = true ]; then
-        local headers=$(curl -s -I --max-time 5 "$url" 2>/dev/null | head -3 | tr '\n' ' ')
-        print_status 0 "" "Headers: $headers"
+        local headers=$(curl -s -I --max-time 5 "$url" 2>/dev/null | head -1 | tr -d '\r\n')
+        if [ -n "$headers" ]; then
+            print_status 0 "" "Response: $headers"
+        fi
     fi
 }
 
@@ -203,7 +205,7 @@ check_url "http://$DOMAIN/web/" "200" "Offer page endpoint"
 
 # Test with bot user agent (should get offer page)
 if command -v curl >/dev/null 2>&1; then
-    local bot_response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+    bot_response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
         -H "User-Agent: Googlebot/2.1" "http://$DOMAIN/" 2>/dev/null)
     if [ "$bot_response" = "302" ] || [ "$bot_response" = "200" ]; then
         print_status 0 "Bot detection working (HTTP $bot_response)"
@@ -214,7 +216,7 @@ fi
 
 # Test with human user agent (should get white page)
 if command -v curl >/dev/null 2>&1; then
-    local human_response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+    human_response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
         -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "http://$DOMAIN/" 2>/dev/null)
     if [ "$human_response" = "200" ]; then
         print_status 0 "Human traffic routing working (HTTP $human_response)"
@@ -232,7 +234,7 @@ check_file "/var/log/nginx/cloaking_error.log" "Nginx error log"
 
 # Check for recent errors
 if [ -f "/var/log/nginx/cloaking_error.log" ]; then
-    local recent_errors=$(tail -n 100 /var/log/nginx/cloaking_error.log 2>/dev/null | grep "$(date '+%Y/%m/%d')" | wc -l)
+    recent_errors=$(tail -n 100 /var/log/nginx/cloaking_error.log 2>/dev/null | grep "$(date '+%Y/%m/%d')" | wc -l)
     if [ "$recent_errors" -eq 0 ]; then
         print_status 0 "No recent nginx errors today"
     else
@@ -245,7 +247,7 @@ if [ -f "/var/log/nginx/cloaking_error.log" ]; then
 fi
 
 # Check Next.js service logs
-local nextjs_errors=$(journalctl -u nextjs-app --since "1 hour ago" --no-pager 2>/dev/null | grep -i error | wc -l)
+nextjs_errors=$(journalctl -u nextjs-app --since "1 hour ago" --no-pager 2>/dev/null | grep -i error | wc -l)
 if [ "$nextjs_errors" -eq 0 ]; then
     print_status 0 "No recent Next.js errors"
 else
@@ -262,24 +264,24 @@ echo
 print_header "Performance"
 
 # Check system load
-local load=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')
-if (( $(echo "$load < 2.0" | bc -l) )); then
+load=$(uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//')
+if [ -n "$load" ] && (( $(echo "$load < 2.0" | bc -l 2>/dev/null || echo "0") )); then
     print_status 0 "System load is normal ($load)"
 else
     print_status 1 "System load is high ($load)"
 fi
 
 # Check memory usage
-local mem_usage=$(free | grep Mem | awk '{printf "%.1f", $3/$2 * 100.0}')
-if (( $(echo "$mem_usage < 80.0" | bc -l) )); then
+mem_usage=$(free | grep Mem | awk '{printf "%.1f", $3/$2 * 100.0}')
+if [ -n "$mem_usage" ] && (( $(echo "$mem_usage < 80.0" | bc -l 2>/dev/null || echo "0") )); then
     print_status 0 "Memory usage is normal (${mem_usage}%)"
 else
     print_status 1 "Memory usage is high (${mem_usage}%)"
 fi
 
 # Check disk space
-local disk_usage=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
-if [ "$disk_usage" -lt 80 ]; then
+disk_usage=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
+if [ -n "$disk_usage" ] && [ "$disk_usage" -lt 80 ]; then
     print_status 0 "Disk space is sufficient (${disk_usage}% used)"
 else
     print_status 1 "Disk space is low (${disk_usage}% used)"
