@@ -193,6 +193,10 @@ if [ -d "$HOME/.local/share/fnm" ]; then
         
         # Copy Node.js binaries to system location for www-data access
         echo -e "${YELLOW}Copying Node.js binaries to system location...${NC}"
+        
+        # Remove any existing symlinks or files
+        rm -f /usr/local/bin/node /usr/local/bin/npm
+        
         cp "$NODE_PATH" /usr/local/bin/node
         cp "$NPM_PATH" /usr/local/bin/npm
         
