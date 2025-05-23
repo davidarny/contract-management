@@ -1,0 +1,29 @@
+[Unit]
+Description=Next.js Application for Cloaking Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/html
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+Environment=PORT=3000
+
+# Logging
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=nextjs-app
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/html
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target 
