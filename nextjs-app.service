@@ -13,8 +13,6 @@ Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
 Environment=PORT=3000
-Environment=NVM_DIR=/var/www/.nvm
-Environment=PATH=/var/www/.nvm/versions/node/v22.16.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Logging
 StandardOutput=syslog
@@ -27,6 +25,7 @@ ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/www/html
 ReadWritePaths=/var/www/.nvm
+ReadWritePaths=/var/lib/www-data/.nvm
 PrivateTmp=true
 
 [Install]

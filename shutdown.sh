@@ -105,6 +105,16 @@ echo -e "${YELLOW}Cleaning up package cache...${NC}"
 apt autoremove -y
 apt autoclean
 
+# Restore original apt sources if backups exist
+echo -e "${YELLOW}Restoring original apt sources configuration...${NC}"
+for backup in /etc/apt/sources.list.d/*.backup; do
+    if [ -f "$backup" ]; then
+        original="${backup%.backup}"
+        echo -e "${YELLOW}Restoring $(basename "$original") from backup...${NC}"
+        mv "$backup" "$original"
+    fi
+done
+
 # Reset firewall rules (if ufw is installed and was configured)
 if command -v ufw &> /dev/null; then
     echo -e "${YELLOW}Resetting firewall rules...${NC}"

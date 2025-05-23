@@ -27,6 +27,32 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# Clean up apt sources to avoid warnings
+echo -e "${YELLOW}Cleaning up apt sources configuration...${NC}"
+
+# Remove duplicate entries in ubuntu-mirrors.list if it exists
+if [ -f "/etc/apt/sources.list.d/ubuntu-mirrors.list" ]; then
+    echo -e "${YELLOW}Found duplicate sources in ubuntu-mirrors.list, cleaning up...${NC}"
+    # Create a backup
+    cp /etc/apt/sources.list.d/ubuntu-mirrors.list /etc/apt/sources.list.d/ubuntu-mirrors.list.backup
+    # Remove duplicates by keeping only unique lines
+    sort /etc/apt/sources.list.d/ubuntu-mirrors.list | uniq > /tmp/ubuntu-mirrors-clean.list
+    mv /tmp/ubuntu-mirrors-clean.list /etc/apt/sources.list.d/ubuntu-mirrors.list
+fi
+
+# Remove any other potential duplicate source files
+for file in /etc/apt/sources.list.d/*.list; do
+    if [ -f "$file" ] && [ "$(basename "$file")" != "ubuntu-mirrors.list" ]; then
+        # Check if file has duplicate lines and clean if needed
+        if [ "$(sort "$file" | uniq | wc -l)" -ne "$(wc -l < "$file")" ]; then
+            echo -e "${YELLOW}Cleaning duplicates in $(basename "$file")...${NC}"
+            cp "$file" "$file.backup"
+            sort "$file" | uniq > "/tmp/$(basename "$file")"
+            mv "/tmp/$(basename "$file")" "$file"
+        fi
+    fi
+done
+
 # Update system packages
 echo -e "${YELLOW}Updating system packages...${NC}"
 apt update && apt upgrade -y
@@ -66,30 +92,50 @@ nvm alias default 22
 
 # Install nvm for www-data user
 echo -e "${YELLOW}Installing nvm for www-data user...${NC}"
+
+# Ensure www-data home directory exists and has proper permissions
+WWW_DATA_HOME=$(eval echo ~www-data)
+if [ ! -d "$WWW_DATA_HOME" ]; then
+    mkdir -p "$WWW_DATA_HOME"
+fi
+chown www-data:www-data "$WWW_DATA_HOME"
+chmod 755 "$WWW_DATA_HOME"
+
+# Install nvm for www-data user
 sudo -u www-data bash -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash'
 sudo -u www-data bash -c 'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm install 22 && nvm use 22 && nvm alias default 22'
 
 # Create system-wide symlinks
 WWW_DATA_HOME=$(eval echo ~www-data)
-NODE_PATH="$WWW_DATA_HOME/.nvm/versions/node/v22.16.0/bin/node"
-NPM_PATH="$WWW_DATA_HOME/.nvm/versions/node/v22.16.0/bin/npm"
+echo -e "${YELLOW}www-data home directory: $WWW_DATA_HOME${NC}"
 
-# Find actual Node.js version directory
-if [ ! -f "$NODE_PATH" ]; then
+# Find the actual Node.js installation directory
+NODE_PATH=""
+NPM_PATH=""
+
+# Look for Node.js installation in www-data's nvm directory
+if [ -d "$WWW_DATA_HOME/.nvm/versions/node" ]; then
     NODE_VERSION_DIR=$(find "$WWW_DATA_HOME/.nvm/versions/node" -name "v22.*" -type d | head -1)
-    if [ -n "$NODE_VERSION_DIR" ]; then
+    if [ -n "$NODE_VERSION_DIR" ] && [ -d "$NODE_VERSION_DIR" ]; then
         NODE_PATH="$NODE_VERSION_DIR/bin/node"
         NPM_PATH="$NODE_VERSION_DIR/bin/npm"
+        echo -e "${GREEN}Found Node.js installation at: $NODE_VERSION_DIR${NC}"
     fi
 fi
 
 # Create symlinks for system-wide access
 if [ -f "$NODE_PATH" ] && [ -f "$NPM_PATH" ]; then
+    rm -f /usr/local/bin/node /usr/local/bin/npm
     ln -sf "$NODE_PATH" /usr/local/bin/node
     ln -sf "$NPM_PATH" /usr/local/bin/npm
     echo -e "${GREEN}Created system-wide Node.js symlinks${NC}"
+    echo -e "${GREEN}  node -> $NODE_PATH${NC}"
+    echo -e "${GREEN}  npm -> $NPM_PATH${NC}"
 else
     echo -e "${RED}Could not find Node.js installation for www-data user${NC}"
+    echo -e "${YELLOW}Checking what was installed...${NC}"
+    ls -la "$WWW_DATA_HOME/.nvm/" 2>/dev/null || echo "No .nvm directory found"
+    ls -la "$WWW_DATA_HOME/.nvm/versions/" 2>/dev/null || echo "No versions directory found"
     exit 1
 fi
 
