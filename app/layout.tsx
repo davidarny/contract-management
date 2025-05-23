@@ -34,11 +34,12 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
-  metadataBase: new URL('https://contract-management.com'), // Replace with your actual domain
+  metadataBase: new URL('https://contractdatahub.tech/'),
   icons: {
     icon: [
       { url: '/favicon/favicon.ico', sizes: '16x16 32x32 48x48' },
       { url: '/favicon/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
     ],
     apple: [
       {
@@ -50,13 +51,13 @@ export const metadata: Metadata = {
     other: [
       {
         rel: 'icon',
-        url: '/favicon/icon-192.png',
+        url: '/favicon/web-app-manifest-192x192.png',
         sizes: '192x192',
         type: 'image/png',
       },
       {
         rel: 'icon',
-        url: '/favicon/icon-512.png',
+        url: '/favicon/web-app-manifest-512x512.png',
         sizes: '512x512',
         type: 'image/png',
       },
