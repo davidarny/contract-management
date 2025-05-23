@@ -64,29 +64,57 @@ apt install -y nginx \
     php${PHP_VERSION}-fpm \
     php${PHP_VERSION}-curl \
     php${PHP_VERSION}-mbstring \
-    php${PHP_VERSION}-json \
-    php${PHP_VERSION}-openssl \
     php${PHP_VERSION}-xml \
     php${PHP_VERSION}-cli \
     nodejs npm
 
-# Install Node.js LTS if the default version is too old
-echo -e "${YELLOW}Checking Node.js version...${NC}"
-NODE_VERSION=$(node --version 2>/dev/null | sed 's/v//' | cut -d. -f1 || echo "0")
-if [ "$NODE_VERSION" -lt 18 ]; then
-    echo -e "${YELLOW}Installing Node.js LTS...${NC}"
-    
-    # Remove old nodejs if present
-    apt remove -y nodejs npm 2>/dev/null || true
-    
-    # Add NodeSource repository for LTS
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-    apt install -y nodejs
-    
-    echo -e "${GREEN}Installed Node.js $(node --version) and npm $(npm --version)${NC}"
-else
-    echo -e "${GREEN}Node.js $(node --version) is already installed and compatible${NC}"
-fi
+# Install additional PHP packages that may be available (ignore errors for built-in modules)
+echo -e "${YELLOW}Installing additional PHP packages (if available)...${NC}"
+for package in php${PHP_VERSION}-json php${PHP_VERSION}-openssl php${PHP_VERSION}-zip php${PHP_VERSION}-gd; do
+    if apt-cache show $package >/dev/null 2>&1; then
+        echo -e "${GREEN}Installing $package${NC}"
+        apt install -y $package
+    else
+        echo -e "${YELLOW}$package not available (likely built into PHP core)${NC}"
+    fi
+done
+
+# Install Node.js using fnm
+echo -e "${YELLOW}Installing Node.js using fnm...${NC}"
+
+# Remove old nodejs if present
+apt remove -y nodejs npm 2>/dev/null || true
+
+# Install fnm for root user
+echo -e "${YELLOW}Installing fnm (Fast Node Manager)...${NC}"
+curl -o- https://fnm.vercel.app/install | bash
+
+# Source fnm for current session
+export PATH="$HOME/.local/share/fnm:$PATH"
+eval "$(fnm env --use-on-cd)"
+
+# Install Node.js 22
+echo -e "${YELLOW}Installing Node.js 22 using fnm...${NC}"
+fnm install 22
+fnm use 22
+fnm default 22
+
+# Create symbolic links for global access
+ln -sf "$(fnm current)" /usr/local/bin/node 2>/dev/null || true
+ln -sf "$(dirname $(fnm current))/npm" /usr/local/bin/npm 2>/dev/null || true
+
+# Install fnm for www-data user
+echo -e "${YELLOW}Setting up fnm for www-data user...${NC}"
+sudo -u www-data bash -c 'curl -o- https://fnm.vercel.app/install | bash'
+sudo -u www-data bash -c 'export PATH="$HOME/.local/share/fnm:$PATH" && eval "$(fnm env --use-on-cd)" && fnm install 22 && fnm use 22 && fnm default 22'
+
+# Add fnm to system profile
+echo 'export PATH="$HOME/.local/share/fnm:$PATH"' >> /etc/profile
+echo 'eval "$(fnm env --use-on-cd)"' >> /etc/profile
+
+# Verify installation
+echo -e "${GREEN}Node.js version: $(node -v)${NC}"
+echo -e "${GREEN}npm version: $(npm -v)${NC}"
 
 # Enable and start PHP-FPM
 echo -e "${YELLOW}Configuring PHP-FPM...${NC}"

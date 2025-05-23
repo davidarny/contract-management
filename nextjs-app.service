@@ -7,11 +7,13 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/html
-ExecStart=/usr/bin/npm start
+ExecStartPre=/bin/bash -c 'export PATH="$HOME/.local/share/fnm:$PATH" && eval "$(fnm env --use-on-cd)" && fnm use 22'
+ExecStart=/bin/bash -c 'export PATH="$HOME/.local/share/fnm:$PATH" && eval "$(fnm env --use-on-cd)" && npm start'
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
 Environment=PORT=3000
+Environment=PATH=/var/lib/www-data/.local/share/fnm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Logging
 StandardOutput=syslog
@@ -23,6 +25,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/www/html
+ReadWritePaths=/var/lib/www-data/.local/share/fnm
 PrivateTmp=true
 
 [Install]
