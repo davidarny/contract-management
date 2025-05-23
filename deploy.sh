@@ -65,12 +65,20 @@ apt install -y nginx \
     php${PHP_VERSION}-curl \
     php${PHP_VERSION}-mbstring \
     php${PHP_VERSION}-xml \
-    php${PHP_VERSION}-cli \
-    nodejs npm
+    php${PHP_VERSION}-cli
 
 # Install additional PHP packages that may be available (ignore errors for built-in modules)
 echo -e "${YELLOW}Installing additional PHP packages (if available)...${NC}"
-for package in php${PHP_VERSION}-json php${PHP_VERSION}-openssl php${PHP_VERSION}-zip php${PHP_VERSION}-gd; do
+
+# For PHP 8.0+, json and openssl are built into core, so we skip them
+if [[ "$PHP_VERSION" == "7.4" ]]; then
+    ADDITIONAL_PACKAGES="php${PHP_VERSION}-json php${PHP_VERSION}-openssl php${PHP_VERSION}-zip php${PHP_VERSION}-gd"
+else
+    ADDITIONAL_PACKAGES="php${PHP_VERSION}-zip php${PHP_VERSION}-gd"
+    echo -e "${YELLOW}Skipping php${PHP_VERSION}-json and php${PHP_VERSION}-openssl (built into PHP ${PHP_VERSION} core)${NC}"
+fi
+
+for package in $ADDITIONAL_PACKAGES; do
     if apt-cache show $package >/dev/null 2>&1; then
         echo -e "${GREEN}Installing $package${NC}"
         apt install -y $package
