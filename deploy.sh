@@ -190,6 +190,22 @@ if [ -d "$HOME/.local/share/fnm" ]; then
         NPM_PATH="$FNM_NODE_DIR/bin/npm"
         NODE_PATH="$FNM_NODE_DIR/bin/node"
         echo -e "${GREEN}Found fnm installation at: $FNM_NODE_DIR${NC}"
+        
+        # Copy Node.js binaries to system location for www-data access
+        echo -e "${YELLOW}Copying Node.js binaries to system location...${NC}"
+        cp "$NODE_PATH" /usr/local/bin/node
+        cp "$NPM_PATH" /usr/local/bin/npm
+        
+        # Also copy the entire node_modules if it exists (for global packages)
+        if [ -d "$FNM_NODE_DIR/lib" ]; then
+            cp -r "$FNM_NODE_DIR/lib" /usr/local/
+        fi
+        
+        # Update paths to system location
+        NPM_PATH="/usr/local/bin/npm"
+        NODE_PATH="/usr/local/bin/node"
+        
+        chmod +x "$NPM_PATH" "$NODE_PATH"
     fi
 fi
 
@@ -213,29 +229,28 @@ fi
 echo -e "${GREEN}Using npm at: $NPM_PATH${NC}"
 echo -e "${GREEN}Using node at: $NODE_PATH${NC}"
 
-# Ensure the binaries are executable
-chmod +x "$NPM_PATH" "$NODE_PATH" 2>/dev/null || true
-
-# Create a temporary script to run npm commands with proper environment
-cat > /tmp/run_npm.sh << EOF
-#!/bin/bash
-export PATH="$(dirname $NPM_PATH):\$PATH"
-export NODE_PATH="$NODE_PATH"
-cd "$PROJECT_DIR"
-"$NPM_PATH" "\$@"
-EOF
-
-chmod +x /tmp/run_npm.sh
-
-# Install dependencies and build as www-data user
-echo -e "${YELLOW}Installing npm dependencies...${NC}"
-sudo -u www-data /tmp/run_npm.sh install
-
-echo -e "${YELLOW}Building Next.js application...${NC}"
-sudo -u www-data /tmp/run_npm.sh run build
-
-# Clean up temporary script
-rm -f /tmp/run_npm.sh
+# Verify www-data can access the binaries
+if ! sudo -u www-data test -x "$NPM_PATH"; then
+    echo -e "${YELLOW}www-data cannot access npm, running as root and fixing ownership...${NC}"
+    
+    # Run npm commands as root
+    echo -e "${YELLOW}Installing npm dependencies...${NC}"
+    "$NPM_PATH" install
+    
+    echo -e "${YELLOW}Building Next.js application...${NC}"
+    "$NPM_PATH" run build
+    
+    # Fix ownership of all files to www-data
+    echo -e "${YELLOW}Fixing file ownership...${NC}"
+    chown -R www-data:www-data "$PROJECT_DIR"
+else
+    # Run as www-data if permissions allow
+    echo -e "${YELLOW}Installing npm dependencies...${NC}"
+    sudo -u www-data "$NPM_PATH" install
+    
+    echo -e "${YELLOW}Building Next.js application...${NC}"
+    sudo -u www-data "$NPM_PATH" run build
+fi
 
 # Configure Nginx
 echo -e "${YELLOW}Configuring Nginx...${NC}"
