@@ -177,8 +177,34 @@ chown -R www-data:www-data $PROJECT_DIR
 # Build Next.js application
 echo -e "${YELLOW}Building Next.js application...${NC}"
 cd $PROJECT_DIR
-sudo -u www-data npm install
-sudo -u www-data npm run build
+
+# Get the full path to npm
+NPM_PATH=$(which npm)
+NODE_PATH=$(which node)
+
+if [ -z "$NPM_PATH" ]; then
+    echo -e "${RED}npm not found in PATH. Checking common locations...${NC}"
+    # Check common npm locations
+    for path in /usr/local/bin/npm /usr/bin/npm ~/.local/share/fnm/node-versions/*/installation/bin/npm; do
+        if [ -f "$path" ]; then
+            NPM_PATH="$path"
+            NODE_PATH="$(dirname $path)/node"
+            break
+        fi
+    done
+fi
+
+if [ -z "$NPM_PATH" ]; then
+    echo -e "${RED}npm still not found. Please check Node.js installation.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}Using npm at: $NPM_PATH${NC}"
+echo -e "${GREEN}Using node at: $NODE_PATH${NC}"
+
+# Install dependencies and build as www-data user with explicit PATH
+sudo -u www-data env PATH="$(dirname $NPM_PATH):$PATH" $NPM_PATH install
+sudo -u www-data env PATH="$(dirname $NPM_PATH):$PATH" $NPM_PATH run build
 
 # Configure Nginx
 echo -e "${YELLOW}Configuring Nginx...${NC}"
