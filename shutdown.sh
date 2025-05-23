@@ -69,7 +69,7 @@ if [ -d "$HOME/.nvm" ]; then
 fi
 
 # Remove nvm for www-data user
-WWW_DATA_HOME=$(eval echo ~www-data)
+WWW_DATA_HOME="/var/www"
 if [ -d "$WWW_DATA_HOME/.nvm" ]; then
     rm -rf "$WWW_DATA_HOME/.nvm"
 fi

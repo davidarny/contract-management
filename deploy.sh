@@ -94,7 +94,7 @@ nvm alias default 22
 echo -e "${YELLOW}Installing nvm for www-data user...${NC}"
 
 # Ensure www-data home directory exists and has proper permissions
-WWW_DATA_HOME=$(eval echo ~www-data)
+WWW_DATA_HOME="/var/www"
 if [ ! -d "$WWW_DATA_HOME" ]; then
     mkdir -p "$WWW_DATA_HOME"
 fi
@@ -102,11 +102,11 @@ chown www-data:www-data "$WWW_DATA_HOME"
 chmod 755 "$WWW_DATA_HOME"
 
 # Install nvm for www-data user
-sudo -u www-data bash -c 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash'
-sudo -u www-data bash -c 'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm install 22 && nvm use 22 && nvm alias default 22'
+sudo -u www-data bash -c 'export HOME=/var/www && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash'
+sudo -u www-data bash -c 'export HOME=/var/www && export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm install 22 && nvm use 22 && nvm alias default 22'
 
 # Create system-wide symlinks
-WWW_DATA_HOME=$(eval echo ~www-data)
+WWW_DATA_HOME="/var/www"
 echo -e "${YELLOW}www-data home directory: $WWW_DATA_HOME${NC}"
 
 # Find the actual Node.js installation directory
@@ -160,6 +160,7 @@ cd $PROJECT_DIR
 
 # Run npm commands as www-data with nvm environment
 sudo -u www-data bash -c '
+    export HOME=/var/www
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
     cd "'$PROJECT_DIR'"

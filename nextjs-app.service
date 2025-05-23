@@ -7,12 +7,13 @@ Type=simple
 User=www-data
 Group=www-data
 WorkingDirectory=/var/www/html
-ExecStartPre=/bin/bash -c 'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm use 22'
-ExecStart=/bin/bash -c 'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && npm start'
+ExecStartPre=/bin/bash -c 'export HOME=/var/www && export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && nvm use 22'
+ExecStart=/bin/bash -c 'export HOME=/var/www && export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && npm start'
 Restart=always
 RestartSec=10
 Environment=NODE_ENV=production
 Environment=PORT=3000
+Environment=HOME=/var/www
 
 # Logging
 StandardOutput=syslog
@@ -22,10 +23,9 @@ SyslogIdentifier=nextjs-app
 # Security settings
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=false
 ReadWritePaths=/var/www/html
-ReadWritePaths=/var/www/.nvm
-ReadWritePaths=/var/lib/www-data/.nvm
+ReadWritePaths=/var/www
 PrivateTmp=true
 
 [Install]
