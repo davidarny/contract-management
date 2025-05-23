@@ -126,28 +126,40 @@ if [ "$INSTALL_FNM" = true ]; then
     # Remove old nodejs if present
     apt remove -y nodejs npm 2>/dev/null || true
 
-    # Install fnm for root user
-    echo -e "${YELLOW}Installing fnm (Fast Node Manager)...${NC}"
+    # Install fnm for www-data user (primary installation)
+    echo -e "${YELLOW}Installing fnm for www-data user...${NC}"
+    sudo -u www-data bash -c 'curl -o- https://fnm.vercel.app/install | bash'
+    sudo -u www-data bash -c 'export PATH="$HOME/.local/share/fnm:$PATH" && eval "$(fnm env --use-on-cd)" && fnm install 22 && fnm use 22 && fnm default 22'
+
+    # Get the www-data fnm paths
+    WWW_DATA_HOME=$(eval echo ~www-data)
+    WWW_DATA_FNM_DIR="$WWW_DATA_HOME/.local/share/fnm"
+    
+    # Find the Node.js installation for www-data
+    if [ -d "$WWW_DATA_FNM_DIR" ]; then
+        WWW_DATA_NODE_DIR=$(find "$WWW_DATA_FNM_DIR/node-versions" -name "installation" -type d | head -1)
+        if [ -n "$WWW_DATA_NODE_DIR" ]; then
+            # Create system-wide symlinks to www-data's Node.js installation
+            rm -f /usr/local/bin/node /usr/local/bin/npm
+            ln -sf "$WWW_DATA_NODE_DIR/bin/node" /usr/local/bin/node
+            ln -sf "$WWW_DATA_NODE_DIR/bin/npm" /usr/local/bin/npm
+            
+            echo -e "${GREEN}Created symlinks to www-data's Node.js installation${NC}"
+        fi
+    fi
+
+    # Also install fnm for root user (for administrative tasks)
+    echo -e "${YELLOW}Installing fnm for root user...${NC}"
     curl -o- https://fnm.vercel.app/install | bash
 
     # Source fnm for current session
     export PATH="$HOME/.local/share/fnm:$PATH"
     eval "$(fnm env --use-on-cd)"
 
-    # Install Node.js 22
-    echo -e "${YELLOW}Installing Node.js 22 using fnm...${NC}"
+    # Install Node.js 22 for root
     fnm install 22
     fnm use 22
     fnm default 22
-
-    # Create symbolic links for global access
-    ln -sf "$(fnm current)" /usr/local/bin/node 2>/dev/null || true
-    ln -sf "$(dirname $(fnm current))/npm" /usr/local/bin/npm 2>/dev/null || true
-
-    # Install fnm for www-data user
-    echo -e "${YELLOW}Setting up fnm for www-data user...${NC}"
-    sudo -u www-data bash -c 'curl -o- https://fnm.vercel.app/install | bash'
-    sudo -u www-data bash -c 'export PATH="$HOME/.local/share/fnm:$PATH" && eval "$(fnm env --use-on-cd)" && fnm install 22 && fnm use 22 && fnm default 22'
 
     # Add fnm to system profile
     echo 'export PATH="$HOME/.local/share/fnm:$PATH"' >> /etc/profile
@@ -178,42 +190,25 @@ chown -R www-data:www-data $PROJECT_DIR
 echo -e "${YELLOW}Building Next.js application...${NC}"
 cd $PROJECT_DIR
 
-# Get the actual npm and node paths, avoiding temporary fnm multishell paths
+# Get the actual npm and node paths for www-data user
 NPM_PATH=""
 NODE_PATH=""
 
-# First, try to find fnm's actual installation
-if [ -d "$HOME/.local/share/fnm" ]; then
-    # Find the current/default Node.js version in fnm
-    FNM_NODE_DIR=$(find "$HOME/.local/share/fnm/node-versions" -name "installation" -type d | head -1)
-    if [ -n "$FNM_NODE_DIR" ]; then
-        NPM_PATH="$FNM_NODE_DIR/bin/npm"
-        NODE_PATH="$FNM_NODE_DIR/bin/node"
-        echo -e "${GREEN}Found fnm installation at: $FNM_NODE_DIR${NC}"
-        
-        # Copy Node.js binaries to system location for www-data access
-        echo -e "${YELLOW}Copying Node.js binaries to system location...${NC}"
-        
-        # Remove any existing symlinks or files
-        rm -f /usr/local/bin/node /usr/local/bin/npm
-        
-        cp "$NODE_PATH" /usr/local/bin/node
-        cp "$NPM_PATH" /usr/local/bin/npm
-        
-        # Also copy the entire node_modules if it exists (for global packages)
-        if [ -d "$FNM_NODE_DIR/lib" ]; then
-            cp -r "$FNM_NODE_DIR/lib" /usr/local/
-        fi
-        
-        # Update paths to system location
-        NPM_PATH="/usr/local/bin/npm"
-        NODE_PATH="/usr/local/bin/node"
-        
-        chmod +x "$NPM_PATH" "$NODE_PATH"
+# Get www-data home directory
+WWW_DATA_HOME=$(eval echo ~www-data)
+
+# First, try to find www-data's fnm installation
+if [ -d "$WWW_DATA_HOME/.local/share/fnm" ]; then
+    # Find the current/default Node.js version in www-data's fnm
+    WWW_DATA_NODE_DIR=$(find "$WWW_DATA_HOME/.local/share/fnm/node-versions" -name "installation" -type d | head -1)
+    if [ -n "$WWW_DATA_NODE_DIR" ]; then
+        NPM_PATH="$WWW_DATA_NODE_DIR/bin/npm"
+        NODE_PATH="$WWW_DATA_NODE_DIR/bin/node"
+        echo -e "${GREEN}Found www-data's fnm installation at: $WWW_DATA_NODE_DIR${NC}"
     fi
 fi
 
-# Fallback to system paths if fnm paths not found or don't exist
+# Fallback to system paths if www-data's fnm not found
 if [ ! -f "$NPM_PATH" ]; then
     echo -e "${YELLOW}Checking system paths for npm...${NC}"
     for path in /usr/local/bin/npm /usr/bin/npm; do
@@ -233,28 +228,22 @@ fi
 echo -e "${GREEN}Using npm at: $NPM_PATH${NC}"
 echo -e "${GREEN}Using node at: $NODE_PATH${NC}"
 
-# Verify www-data can access the binaries
-if ! sudo -u www-data test -x "$NPM_PATH"; then
-    echo -e "${YELLOW}www-data cannot access npm, running as root and fixing ownership...${NC}"
-    
-    # Run npm commands as root
-    echo -e "${YELLOW}Installing npm dependencies...${NC}"
-    "$NPM_PATH" install
-    
-    echo -e "${YELLOW}Building Next.js application...${NC}"
-    "$NPM_PATH" run build
-    
-    # Fix ownership of all files to www-data
-    echo -e "${YELLOW}Fixing file ownership...${NC}"
-    chown -R www-data:www-data "$PROJECT_DIR"
-else
-    # Run as www-data if permissions allow
-    echo -e "${YELLOW}Installing npm dependencies...${NC}"
-    sudo -u www-data "$NPM_PATH" install
-    
-    echo -e "${YELLOW}Building Next.js application...${NC}"
-    sudo -u www-data "$NPM_PATH" run build
-fi
+# Run npm commands as www-data user with proper fnm environment
+echo -e "${YELLOW}Installing npm dependencies...${NC}"
+sudo -u www-data bash -c "
+    export PATH=\"$WWW_DATA_HOME/.local/share/fnm:\$PATH\"
+    eval \"\$(fnm env --use-on-cd)\"
+    cd \"$PROJECT_DIR\"
+    npm install
+"
+
+echo -e "${YELLOW}Building Next.js application...${NC}"
+sudo -u www-data bash -c "
+    export PATH=\"$WWW_DATA_HOME/.local/share/fnm:\$PATH\"
+    eval \"\$(fnm env --use-on-cd)\"
+    cd \"$PROJECT_DIR\"
+    npm run build
+"
 
 # Configure Nginx
 echo -e "${YELLOW}Configuring Nginx...${NC}"
