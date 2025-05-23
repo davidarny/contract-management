@@ -3,7 +3,7 @@
 import { compareDesc, parse } from 'date-fns';
 import { useQueryState } from 'nuqs';
 
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 
 import { ArticleCard } from '@/components/article-card';
 import {
@@ -36,18 +36,21 @@ export function PaginatedArticles({
   });
 
   // Helper function to parse date strings
-  const parseArticleDate = (dateString: string): Date => {
+  const parseArticleDate = useCallback((dateString: string): Date => {
     return parse(dateString, 'MMMM d, yyyy', new Date());
-  };
+  }, []);
 
   // Helper function to sort articles by date and isLarge
-  const sortArticles = (a: Article, b: Article): number => {
-    // First, prioritize isLarge articles
-    if (a.isLarge && !b.isLarge) return -1;
-    if (!a.isLarge && b.isLarge) return 1;
-    // Then sort by date within each group
-    return compareDesc(parseArticleDate(a.date), parseArticleDate(b.date));
-  };
+  const sortArticles = useCallback(
+    (a: Article, b: Article): number => {
+      // First, prioritize isLarge articles
+      if (a.isLarge && !b.isLarge) return -1;
+      if (!a.isLarge && b.isLarge) return 1;
+      // Then sort by date within each group
+      return compareDesc(parseArticleDate(a.date), parseArticleDate(b.date));
+    },
+    [parseArticleDate]
+  );
 
   // Filter and sort articles
   const filteredArticles = useMemo(() => {
@@ -60,7 +63,7 @@ export function PaginatedArticles({
       : articles.toSorted(sortArticles);
 
     return filtered;
-  }, [articles, selectedTopicId]);
+  }, [articles, selectedTopicId, sortArticles]);
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredArticles.length / articlesPerPage);
@@ -70,16 +73,16 @@ export function PaginatedArticles({
   const paginatedArticles = filteredArticles.slice(startIndex, endIndex);
 
   // Reset to page 1 when topic changes
-  const handleTopicChange = () => {
+  const handleTopicChange = useCallback(() => {
     if (currentPageNumber > totalPages && totalPages > 0) {
       setCurrentPage('1');
     }
-  };
+  }, [currentPageNumber, totalPages, setCurrentPage]);
 
   // Effect to handle topic changes
-  useMemo(() => {
+  useEffect(() => {
     handleTopicChange();
-  }, [selectedTopicId, totalPages]);
+  }, [selectedTopicId, handleTopicChange]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page.toString());
