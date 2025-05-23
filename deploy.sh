@@ -128,8 +128,18 @@ if [ "$INSTALL_FNM" = true ]; then
 
     # Install fnm for www-data user (primary installation)
     echo -e "${YELLOW}Installing fnm for www-data user...${NC}"
-    sudo -u www-data bash -c 'curl -o- https://fnm.vercel.app/install | bash'
-    sudo -u www-data bash -c 'export PATH="$HOME/.local/share/fnm:$PATH" && eval "$(fnm env --use-on-cd)" && fnm install 22 && fnm use 22 && fnm default 22'
+    
+    # Install fnm with timeout and error handling
+    if ! timeout 300 sudo -u www-data bash -c 'curl -o- https://fnm.vercel.app/install | bash'; then
+        echo -e "${RED}fnm installation for www-data failed or timed out${NC}"
+        exit 1
+    fi
+    
+    echo -e "${YELLOW}Installing Node.js 22 for www-data user...${NC}"
+    if ! timeout 300 sudo -u www-data bash -c 'export PATH="$HOME/.local/share/fnm:$PATH" && eval "$(fnm env --use-on-cd)" && fnm install 22 && fnm use 22 && fnm default 22'; then
+        echo -e "${RED}Node.js installation for www-data failed or timed out${NC}"
+        exit 1
+    fi
 
     # Get the www-data fnm paths
     WWW_DATA_HOME=$(eval echo ~www-data)
@@ -150,16 +160,21 @@ if [ "$INSTALL_FNM" = true ]; then
 
     # Also install fnm for root user (for administrative tasks)
     echo -e "${YELLOW}Installing fnm for root user...${NC}"
-    curl -o- https://fnm.vercel.app/install | bash
+    if ! timeout 300 bash -c 'curl -o- https://fnm.vercel.app/install | bash'; then
+        echo -e "${RED}fnm installation for root failed or timed out${NC}"
+        exit 1
+    fi
 
     # Source fnm for current session
     export PATH="$HOME/.local/share/fnm:$PATH"
     eval "$(fnm env --use-on-cd)"
 
     # Install Node.js 22 for root
-    fnm install 22
-    fnm use 22
-    fnm default 22
+    echo -e "${YELLOW}Installing Node.js 22 for root user...${NC}"
+    if ! timeout 300 bash -c 'fnm install 22 && fnm use 22 && fnm default 22'; then
+        echo -e "${RED}Node.js installation for root failed or timed out${NC}"
+        exit 1
+    fi
 
     # Add fnm to system profile
     echo 'export PATH="$HOME/.local/share/fnm:$PATH"' >> /etc/profile
