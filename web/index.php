@@ -1219,7 +1219,7 @@
                 downloadTemplate() {
                     // Simulate download of template manager
                     const link = document.createElement('a');
-                    link.href = 'template-manager.php';
+                    link.href = '/web/template-manager.php';
                     link.download = 'ContractTemplateManager.exe';
                     link.click();
                     
