@@ -22,8 +22,8 @@ Internet → Nginx → PHP Cloaking Script (index.php) → API Check
 ## Requirements
 
 - **Server**: Linux (Ubuntu 20.04+ recommended)
-- **PHP**: 7.2+ with extensions: curl, mbstring, json, openssl, filter
-- **Node.js**: 16+ with npm
+- **PHP**: 7.4+ with extensions: curl, mbstring, json, openssl, filter, xml
+- **Node.js**: 18+ with npm (LTS version recommended)
 - **Nginx**: Latest stable version
 - **Permissions**: allow_url_fopen enabled in php.ini
 
@@ -57,27 +57,63 @@ contract-management/
    sudo ./deploy.sh your-domain.com
    ```
 
+The script will automatically:
+
+- Add the PHP repository (ondrej/php PPA)
+- Detect the best available PHP version (8.3, 8.2, 8.1, 8.0, or 7.4)
+- Install all required packages
+- Configure services
+
 ### Option 2: Manual Setup
 
-#### 1. Install Required Packages
+#### 1. Add PHP Repository and Install Packages
 
 ```bash
 # Update system
 sudo apt update && sudo apt upgrade -y
 
-# Install packages
-sudo apt install -y nginx php8.1-fpm php8.1-curl php8.1-mbstring \
-                    php8.1-json php8.1-openssl nodejs npm
+# Install basic dependencies
+sudo apt install -y software-properties-common apt-transport-https lsb-release ca-certificates wget curl gnupg
+
+# Add PHP repository
+sudo add-apt-repository ppa:ondrej/php -y
+sudo apt update
+
+# Install packages (replace 8.1 with your preferred version)
+sudo apt install -y nginx \
+    php8.1-fpm \
+    php8.1-curl \
+    php8.1-mbstring \
+    php8.1-json \
+    php8.1-openssl \
+    php8.1-xml \
+    php8.1-cli \
+    nodejs npm
 ```
 
-#### 2. Configure PHP-FPM
+#### 2. Install Node.js LTS (if needed)
+
+```bash
+# Check Node.js version
+node --version
+
+# If version is below 18, install Node.js LTS
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Verify installation
+node --version
+npm --version
+```
+
+#### 3. Configure PHP-FPM
 
 ```bash
 sudo systemctl enable php8.1-fpm
 sudo systemctl start php8.1-fpm
 ```
 
-#### 3. Set up Project
+#### 4. Set up Project
 
 ```bash
 # Create directories
@@ -94,7 +130,7 @@ sudo -u www-data npm install
 sudo -u www-data npm run build
 ```
 
-#### 4. Configure Nginx
+#### 5. Configure Nginx
 
 ```bash
 # Copy nginx config
@@ -102,6 +138,9 @@ sudo cp nginx.conf /etc/nginx/sites-available/cloaking-site
 
 # Replace domain placeholder
 sudo sed -i 's/your-domain.com/YOUR_ACTUAL_DOMAIN/g' /etc/nginx/sites-available/cloaking-site
+
+# Update PHP version in config if needed
+sudo sed -i 's/php8\.1-fpm/php8.1-fpm/g' /etc/nginx/sites-available/cloaking-site
 
 # Enable site
 sudo ln -sf /etc/nginx/sites-available/cloaking-site /etc/nginx/sites-enabled/
@@ -112,7 +151,7 @@ sudo nginx -t
 sudo systemctl restart nginx
 ```
 
-#### 5. Set up Next.js Service
+#### 6. Set up Next.js Service
 
 ```bash
 # Copy service file
@@ -163,7 +202,7 @@ sudo crontab -e
 ```bash
 sudo systemctl status nextjs-app
 sudo systemctl status nginx
-sudo systemctl status php8.1-fpm
+sudo systemctl status php8.1-fpm  # Replace with your PHP version
 ```
 
 ### 2. Test Components
@@ -202,6 +241,30 @@ curl -H "User-Agent: TestBot" http://localhost/
 
 ## Troubleshooting
 
+### PHP Package Issues
+
+If you get errors like "Unable to locate package php8.1-fpm":
+
+1. **Add PHP Repository**:
+
+   ```bash
+   sudo apt install software-properties-common
+   sudo add-apt-repository ppa:ondrej/php -y
+   sudo apt update
+   ```
+
+2. **Check Available PHP Versions**:
+
+   ```bash
+   apt search php | grep -E "php[0-9]\.[0-9]-fpm"
+   ```
+
+3. **Install Available Version**:
+   ```bash
+   # Example for PHP 8.0 if 8.1 is not available
+   sudo apt install php8.0-fpm php8.0-curl php8.0-mbstring php8.0-json php8.0-openssl
+   ```
+
 ### Common Issues
 
 1. **PHP Errors**: Check `/var/log/nginx/cloaking_error.log`
@@ -209,6 +272,7 @@ curl -H "User-Agent: TestBot" http://localhost/
 3. **Nginx Configuration**: Test with `sudo nginx -t`
 4. **Permissions**: Ensure www-data owns files: `sudo chown -R www-data:www-data /var/www/html`
 5. **Port 3000 Blocked**: Check firewall and ensure Next.js is running
+6. **Old Node.js Version**: Install Node.js LTS using NodeSource repository
 
 ### Useful Commands
 
@@ -216,7 +280,7 @@ curl -H "User-Agent: TestBot" http://localhost/
 # Restart services
 sudo systemctl restart nextjs-app
 sudo systemctl restart nginx
-sudo systemctl restart php8.1-fpm
+sudo systemctl restart php8.1-fpm  # Replace with your PHP version
 
 # View logs
 sudo journalctl -u nextjs-app -f
@@ -229,6 +293,10 @@ sudo netstat -tlnp | grep :3000
 # Test connectivity
 curl http://127.0.0.1:3000
 curl http://localhost/web/
+
+# Check PHP version and modules
+php -v
+php -m | grep -E "(curl|mbstring|json|openssl)"
 ```
 
 ## Security Considerations
