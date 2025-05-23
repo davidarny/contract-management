@@ -33,7 +33,7 @@ apt update && apt upgrade -y
 
 # Install basic dependencies
 echo -e "${YELLOW}Installing basic dependencies...${NC}"
-apt install -y software-properties-common apt-transport-https lsb-release ca-certificates wget curl gnupg
+apt install -y software-properties-common apt-transport-https lsb-release ca-certificates wget curl gnupg unzip
 
 # Add PHP repository (ondrej/php PPA)
 echo -e "${YELLOW}Adding PHP repository...${NC}"
