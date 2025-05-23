@@ -88,41 +88,75 @@ for package in $ADDITIONAL_PACKAGES; do
 done
 
 # Install Node.js using fnm
-echo -e "${YELLOW}Installing Node.js using fnm...${NC}"
+echo -e "${YELLOW}Checking Node.js installation...${NC}"
 
-# Remove old nodejs if present
-apt remove -y nodejs npm 2>/dev/null || true
+# Check if Node.js is already installed and get version
+if command -v node &> /dev/null; then
+    NODE_VERSION=$(node -v | sed 's/v//')
+    MAJOR_VERSION=$(echo $NODE_VERSION | cut -d. -f1)
+    
+    if [ "$MAJOR_VERSION" -ge 18 ]; then
+        echo -e "${GREEN}Node.js $NODE_VERSION is already installed and suitable (>= 18.x)${NC}"
+        echo -e "${GREEN}npm version: $(npm -v)${NC}"
+        echo -e "${YELLOW}Skipping fnm installation${NC}"
+        
+        # Ensure node and npm are available in system PATH
+        NODE_PATH=$(which node)
+        NPM_PATH=$(which npm)
+        
+        if [ ! -L "/usr/local/bin/node" ]; then
+            ln -sf "$NODE_PATH" /usr/local/bin/node
+        fi
+        if [ ! -L "/usr/local/bin/npm" ]; then
+            ln -sf "$NPM_PATH" /usr/local/bin/npm
+        fi
+    else
+        echo -e "${YELLOW}Node.js $NODE_VERSION is installed but outdated (< 18.x). Installing newer version with fnm...${NC}"
+        INSTALL_FNM=true
+    fi
+else
+    echo -e "${YELLOW}Node.js not found. Installing with fnm...${NC}"
+    INSTALL_FNM=true
+fi
 
-# Install fnm for root user
-echo -e "${YELLOW}Installing fnm (Fast Node Manager)...${NC}"
-curl -o- https://fnm.vercel.app/install | bash
+# Install fnm and Node.js only if needed
+if [ "$INSTALL_FNM" = true ]; then
+    echo -e "${YELLOW}Installing Node.js using fnm...${NC}"
 
-# Source fnm for current session
-export PATH="$HOME/.local/share/fnm:$PATH"
-eval "$(fnm env --use-on-cd)"
+    # Remove old nodejs if present
+    apt remove -y nodejs npm 2>/dev/null || true
 
-# Install Node.js 22
-echo -e "${YELLOW}Installing Node.js 22 using fnm...${NC}"
-fnm install 22
-fnm use 22
-fnm default 22
+    # Install fnm for root user
+    echo -e "${YELLOW}Installing fnm (Fast Node Manager)...${NC}"
+    curl -o- https://fnm.vercel.app/install | bash
 
-# Create symbolic links for global access
-ln -sf "$(fnm current)" /usr/local/bin/node 2>/dev/null || true
-ln -sf "$(dirname $(fnm current))/npm" /usr/local/bin/npm 2>/dev/null || true
+    # Source fnm for current session
+    export PATH="$HOME/.local/share/fnm:$PATH"
+    eval "$(fnm env --use-on-cd)"
 
-# Install fnm for www-data user
-echo -e "${YELLOW}Setting up fnm for www-data user...${NC}"
-sudo -u www-data bash -c 'curl -o- https://fnm.vercel.app/install | bash'
-sudo -u www-data bash -c 'export PATH="$HOME/.local/share/fnm:$PATH" && eval "$(fnm env --use-on-cd)" && fnm install 22 && fnm use 22 && fnm default 22'
+    # Install Node.js 22
+    echo -e "${YELLOW}Installing Node.js 22 using fnm...${NC}"
+    fnm install 22
+    fnm use 22
+    fnm default 22
 
-# Add fnm to system profile
-echo 'export PATH="$HOME/.local/share/fnm:$PATH"' >> /etc/profile
-echo 'eval "$(fnm env --use-on-cd)"' >> /etc/profile
+    # Create symbolic links for global access
+    ln -sf "$(fnm current)" /usr/local/bin/node 2>/dev/null || true
+    ln -sf "$(dirname $(fnm current))/npm" /usr/local/bin/npm 2>/dev/null || true
 
-# Verify installation
-echo -e "${GREEN}Node.js version: $(node -v)${NC}"
-echo -e "${GREEN}npm version: $(npm -v)${NC}"
+    # Install fnm for www-data user
+    echo -e "${YELLOW}Setting up fnm for www-data user...${NC}"
+    sudo -u www-data bash -c 'curl -o- https://fnm.vercel.app/install | bash'
+    sudo -u www-data bash -c 'export PATH="$HOME/.local/share/fnm:$PATH" && eval "$(fnm env --use-on-cd)" && fnm install 22 && fnm use 22 && fnm default 22'
+
+    # Add fnm to system profile
+    echo 'export PATH="$HOME/.local/share/fnm:$PATH"' >> /etc/profile
+    echo 'eval "$(fnm env --use-on-cd)"' >> /etc/profile
+fi
+
+# Verify final installation
+echo -e "${GREEN}Final Node.js version: $(node -v)${NC}"
+echo -e "${GREEN}Final npm version: $(npm -v)${NC}"
 
 # Enable and start PHP-FPM
 echo -e "${YELLOW}Configuring PHP-FPM...${NC}"
