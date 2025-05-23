@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Shutdown script for Next.js + PHP Cloaking Service
-# This script reverts all changes made by deploy.sh
+# Shutdown script to revert deployment changes
+# Usage: sudo ./shutdown.sh
 
 set -e
 
@@ -13,22 +13,11 @@ NC='\033[0m' # No Color
 
 # Configuration
 PROJECT_DIR="/var/www/html"
-WEB_DIR="$PROJECT_DIR/web"
 NGINX_SITE="/etc/nginx/sites-available/cloaking-site"
 NGINX_ENABLED="/etc/nginx/sites-enabled/cloaking-site"
 SERVICE_FILE="/etc/systemd/system/nextjs-app.service"
 
-echo -e "${RED}========================================${NC}"
-echo -e "${RED}CLOAKING SERVICE SHUTDOWN SCRIPT${NC}"
-echo -e "${RED}========================================${NC}"
-echo -e "${YELLOW}This will remove all components installed by deploy.sh${NC}"
-echo
-read -p "Are you sure you want to continue? (yes/no): " confirm
-
-if [ "$confirm" != "yes" ]; then
-    echo -e "${GREEN}Shutdown cancelled.${NC}"
-    exit 0
-fi
+echo -e "${YELLOW}Starting shutdown and cleanup process...${NC}"
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
@@ -36,148 +25,121 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-echo -e "${YELLOW}Starting shutdown process...${NC}"
-
 # Stop and disable services
 echo -e "${YELLOW}Stopping and disabling services...${NC}"
-systemctl stop nextjs-app 2>/dev/null || echo -e "${YELLOW}nextjs-app service not running${NC}"
-systemctl disable nextjs-app 2>/dev/null || echo -e "${YELLOW}nextjs-app service not enabled${NC}"
-
-systemctl stop nginx 2>/dev/null || echo -e "${YELLOW}nginx service not running${NC}"
-systemctl disable nginx 2>/dev/null || echo -e "${YELLOW}nginx service not disabled${NC}"
-
-# Find and stop PHP-FPM services
-for php_version in 8.3 8.2 8.1 8.0 7.4; do
-    if systemctl is-active --quiet php${php_version}-fpm 2>/dev/null; then
-        echo -e "${YELLOW}Stopping PHP ${php_version}-FPM...${NC}"
-        systemctl stop php${php_version}-fpm
-        systemctl disable php${php_version}-fpm
-    fi
-done
+systemctl stop nextjs-app 2>/dev/null || true
+systemctl disable nextjs-app 2>/dev/null || true
+systemctl stop nginx 2>/dev/null || true
+systemctl disable nginx 2>/dev/null || true
+systemctl stop php8.3-fpm 2>/dev/null || true
+systemctl disable php8.3-fpm 2>/dev/null || true
 
 # Remove systemd service file
-echo -e "${YELLOW}Removing systemd service files...${NC}"
-rm -f $SERVICE_FILE
+echo -e "${YELLOW}Removing systemd service file...${NC}"
+rm -f "$SERVICE_FILE"
 systemctl daemon-reload
 
 # Remove nginx configuration
 echo -e "${YELLOW}Removing nginx configuration...${NC}"
-rm -f $NGINX_SITE
-rm -f $NGINX_ENABLED
+rm -f "$NGINX_SITE"
+rm -f "$NGINX_ENABLED"
 
-# Restore default nginx site
-echo -e "${YELLOW}Restoring default nginx site...${NC}"
-if [ -f /etc/nginx/sites-available/default ]; then
+# Restore default nginx site if it exists
+if [ -f "/etc/nginx/sites-available/default" ]; then
     ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
 fi
 
-# Remove project files and directories
+# Remove project files
 echo -e "${YELLOW}Removing project files...${NC}"
 if [ -d "$PROJECT_DIR" ]; then
-    echo -e "${YELLOW}Removing $PROJECT_DIR${NC}"
     rm -rf "$PROJECT_DIR"
 fi
 
-# Remove fnm and Node.js installation
-echo -e "${YELLOW}Removing fnm and Node.js...${NC}"
-
-# Remove for root user
-if [ -d "$HOME/.local/share/fnm" ]; then
-    rm -rf "$HOME/.local/share/fnm"
-fi
-
-# Remove for www-data user
-if [ -d "/var/lib/www-data/.local/share/fnm" ]; then
-    rm -rf "/var/lib/www-data/.local/share/fnm"
-fi
-
-# Remove symbolic links
+# Remove Node.js symlinks
+echo -e "${YELLOW}Removing Node.js symlinks...${NC}"
 rm -f /usr/local/bin/node
 rm -f /usr/local/bin/npm
 
-# Remove fnm from system profile
-echo -e "${YELLOW}Cleaning system profile...${NC}"
-sed -i '/export PATH=.*fnm/d' /etc/profile 2>/dev/null || true
-sed -i '/eval.*fnm env/d' /etc/profile 2>/dev/null || true
+# Remove nvm installations
+echo -e "${YELLOW}Removing nvm installations...${NC}"
+
+# Remove nvm for root user
+if [ -d "$HOME/.nvm" ]; then
+    rm -rf "$HOME/.nvm"
+fi
+
+# Remove nvm for www-data user
+WWW_DATA_HOME=$(eval echo ~www-data)
+if [ -d "$WWW_DATA_HOME/.nvm" ]; then
+    rm -rf "$WWW_DATA_HOME/.nvm"
+fi
+
+# Remove nvm from profile files
+sed -i '/export NVM_DIR/d' /etc/profile 2>/dev/null || true
+sed -i '/\. "$NVM_DIR\/nvm.sh"/d' /etc/profile 2>/dev/null || true
+sed -i '/\. "$NVM_DIR\/bash_completion"/d' /etc/profile 2>/dev/null || true
+
+# Remove nvm from user profiles
+for profile in ~/.bashrc ~/.profile ~/.zshrc; do
+    if [ -f "$profile" ]; then
+        sed -i '/export NVM_DIR/d' "$profile" 2>/dev/null || true
+        sed -i '/\. "$NVM_DIR\/nvm.sh"/d' "$profile" 2>/dev/null || true
+        sed -i '/\. "$NVM_DIR\/bash_completion"/d' "$profile" 2>/dev/null || true
+    fi
+done
 
 # Remove PHP packages
 echo -e "${YELLOW}Removing PHP packages...${NC}"
-PHP_PACKAGES_TO_REMOVE=""
-
-# Find installed PHP packages
-for php_version in 8.3 8.2 8.1 8.0 7.4; do
-    for package in fpm curl mbstring xml cli json openssl zip gd; do
-        if dpkg -l | grep -q "php${php_version}-${package}"; then
-            PHP_PACKAGES_TO_REMOVE="$PHP_PACKAGES_TO_REMOVE php${php_version}-${package}"
-        fi
-    done
-done
-
-if [ -n "$PHP_PACKAGES_TO_REMOVE" ]; then
-    echo -e "${YELLOW}Removing PHP packages: $PHP_PACKAGES_TO_REMOVE${NC}"
-    apt remove -y $PHP_PACKAGES_TO_REMOVE
-fi
+apt remove --purge -y php8.3-fpm php8.3-curl php8.3-mbstring php8.3-xml php8.3-cli php8.3-zip php8.3-gd 2>/dev/null || true
 
 # Remove nginx
 echo -e "${YELLOW}Removing nginx...${NC}"
-apt remove -y nginx nginx-common nginx-core 2>/dev/null || echo -e "${YELLOW}nginx packages not found${NC}"
+apt remove --purge -y nginx nginx-common nginx-core 2>/dev/null || true
 
-# Remove PHP repository (optional - commented out to avoid affecting other projects)
+# Remove PHP repository (optional - commented out to avoid affecting other PHP installations)
 # echo -e "${YELLOW}Removing PHP repository...${NC}"
-# add-apt-repository --remove ppa:ondrej/php -y 2>/dev/null || echo -e "${YELLOW}PHP repository not found${NC}"
+# add-apt-repository --remove ppa:ondrej/php -y 2>/dev/null || true
 
-# Clean up packages
-echo -e "${YELLOW}Cleaning up unused packages...${NC}"
+# Clean up package cache
+echo -e "${YELLOW}Cleaning up package cache...${NC}"
 apt autoremove -y
 apt autoclean
 
-# Remove firewall rules (if ufw is installed and enabled)
+# Reset firewall rules (if ufw is installed and was configured)
 if command -v ufw &> /dev/null; then
-    echo -e "${YELLOW}Removing firewall rules...${NC}"
-    ufw delete allow 'Nginx Full' 2>/dev/null || echo -e "${YELLOW}Nginx firewall rule not found${NC}"
-    ufw delete allow 'Nginx HTTP' 2>/dev/null || echo -e "${YELLOW}Nginx HTTP firewall rule not found${NC}"
-    ufw delete allow 'Nginx HTTPS' 2>/dev/null || echo -e "${YELLOW}Nginx HTTPS firewall rule not found${NC}"
+    echo -e "${YELLOW}Resetting firewall rules...${NC}"
+    ufw --force reset 2>/dev/null || true
 fi
 
-# Clean up any remaining processes on port 3000
-echo -e "${YELLOW}Cleaning up processes on port 3000...${NC}"
-lsof -ti:3000 | xargs kill -9 2>/dev/null || echo -e "${YELLOW}No processes found on port 3000${NC}"
+# Restart remaining services
+echo -e "${YELLOW}Restarting remaining services...${NC}"
+if systemctl is-active --quiet nginx; then
+    systemctl restart nginx
+fi
 
-# Remove any remaining log files
-echo -e "${YELLOW}Cleaning up log files...${NC}"
-rm -f /var/log/nginx/cloaking_*.log
+# Clean up any remaining processes
+echo -e "${YELLOW}Cleaning up remaining processes...${NC}"
+pkill -f "node.*next" 2>/dev/null || true
+pkill -f "npm.*start" 2>/dev/null || true
 
-# Final cleanup
-echo -e "${YELLOW}Performing final cleanup...${NC}"
-
-# Update package lists
-apt update
-
-# Display summary
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}SHUTDOWN COMPLETED SUCCESSFULLY!${NC}"
+echo -e "${GREEN}Shutdown and cleanup completed!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo
-echo -e "${YELLOW}Removed components:${NC}"
-echo "- Next.js application and systemd service"
-echo "- Nginx web server and configuration"
-echo "- PHP-FPM and related packages"
-echo "- fnm and Node.js installation"
+echo -e "${YELLOW}What was removed:${NC}"
+echo "- Next.js application and service"
+echo "- Nginx cloaking configuration"
+echo "- PHP 8.3 and extensions"
+echo "- Node.js and npm (nvm installations)"
 echo "- Project files in $PROJECT_DIR"
-echo "- Firewall rules for web traffic"
-echo "- Log files and temporary data"
+echo "- Systemd service files"
+echo "- Firewall rules (reset to default)"
 echo
-echo -e "${YELLOW}Preserved components:${NC}"
-echo "- PHP repository (to avoid affecting other projects)"
-echo "- Basic system packages and dependencies"
-echo "- SSH access and firewall SSH rules"
-echo "- System users and basic configuration"
+echo -e "${YELLOW}What was preserved:${NC}"
+echo "- System packages and dependencies"
+echo "- User data and home directories"
+echo "- Other nginx sites (if any)"
+echo "- SSH access and basic system configuration"
 echo
-echo -e "${GREEN}Your system has been restored to its pre-deployment state.${NC}"
-echo -e "${YELLOW}Note: You may want to reboot the system to ensure all changes take effect.${NC}"
-echo
-read -p "Would you like to reboot now? (yes/no): " reboot_confirm
-if [ "$reboot_confirm" = "yes" ]; then
-    echo -e "${GREEN}Rebooting system...${NC}"
-    reboot
-fi 
+echo -e "${GREEN}System has been reverted to pre-deployment state.${NC}"
+echo -e "${YELLOW}You may want to reboot the system to ensure all changes take effect.${NC}" 
